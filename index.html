@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>PRESAS EXPOSTAS — Ficha</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-storage-compat.js"></script>
+
+<style>
+body{
+    margin:0;
+    background:#050505;
+    color:#eee;
+    font-family:Arial;
+}
+.vhs::before{
+    content:"";
+    position:fixed;
+    inset:0;
+    pointer-events:none;
+    background:repeating-linear-gradient(
+        to bottom,
+        rgba(255,255,255,0.03),
+        rgba(255,255,255,0.03) 1px,
+        transparent 1px,
+        transparent 3px
+    );
+}
+.container{
+    max-width:460px;
+    margin:auto;
+    padding:20px;
+}
+h1{
+    text-align:center;
+    color:#b11212;
+    letter-spacing:2px;
+}
+input,textarea{
+    width:100%;
+    background:#000;
+    border:1px solid #6e0b0b;
+    color:#fff;
+    padding:8px;
+    margin-top:5px;
+}
+button{
+    background:#b11212;
+    border:none;
+    color:#fff;
+    padding:8px 12px;
+    cursor:pointer;
+}
+.card{
+    border:1px solid #6e0b0b;
+    padding:12px;
+    margin-bottom:14px;
+}
+.counter{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+}
+.dados{
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+    margin-top:8px;
+}
+.dado{
+    width:42px;height:42px;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    border:2px solid #b11212;
+    animation:roll .4s;
+}
+.sucesso{border-color:#2ecc71;color:#2ecc71}
+@keyframes roll{
+    from{transform:rotate(0) scale(.5)}
+    to{transform:rotate(360deg) scale(1)}
+}
+img{
+    width:100%;
+    border:1px solid #6e0b0b;
+}
+</style>
+</head>
+
+<body class="vhs">
+<div class="container">
+
+<h1>PRESAS EXPOSTAS</h1>
+
+<!-- LOGIN -->
+<div id="login" class="card">
+<input id="email" placeholder="Email">
+<input id="senha" type="password" placeholder="Senha">
+<button onclick="login()">Entrar</button>
+</div>
+
+<!-- FICHA -->
+<div id="ficha" style="display:none">
+
+<div class="card">
+<label>Nome</label>
+<input id="nome">
+<label>Arquétipo</label>
+<input id="arquetipo">
+<label>História</label>
+<textarea id="historia"></textarea>
+</div>
+
+<div class="card">
+<label>Foto do Personagem</label>
+<input type="file" id="foto">
+<img id="preview">
+</div>
+
+<div class="card">
+<div class="counter">
+<span>🔫 Shots</span>
+<span id="shots">0</span>
+<button onclick="shot()">+</button>
+</div>
+<div class="counter">
+<span>😰 Tensão</span>
+<span id="tensao">0</span>
+</div>
+</div>
+
+<div class="card">
+<div class="counter">
+<span>🎲 Dados totais</span>
+<span id="dados">6</span>
+</div>
+<div class="counter">
+<span>🎯 Rolar</span>
+<span id="rolarQtd">1</span>
+<button onclick="rolarQtd.innerText++">+</button>
+</div>
+<button onclick="rolar()">ROLAR</button>
+<div class="dados" id="areaDados"></div>
+</div>
+
+</div>
+</div>
+
+<script>
+// 🔥 FIREBASE CONFIG (SUBSTITUA)
+const firebaseConfig = {
+  apiKey: "AIzaSyALP0nO2FneTe-qwKwC_mNlD5jzHMaPljo",
+  authDomain: "rpg-campanha.firebaseapp.com",
+  projectId: "rpg-campanha",
+  storageBucket: "rpg-campanha.firebasestorage.app",
+  messagingSenderId: "1095737273808",
+  appId: "1:1095737273808:web:9ab46ac71ba836825c1dd5"
+};
+
+const auth=firebase.auth();
+const db=firebase.firestore();
+const storage=firebase.storage();
+let uid=null;
+
+// LOGIN
+function login(){
+ auth.signInWithEmailAndPassword(email.value,senha.value)
+ .then(u=>{
+   uid=u.user.uid;
+   login.style.display="none";
+   ficha.style.display="block";
+   carregar();
+ });
+}
+
+// SHOTS (máx 3 → reseta)
+function shot(){
+ let s=parseInt(shots.innerText)+1;
+ if(s>=3)s=0;
+ shots.innerText=s;
+ salvar();
+}
+
+// ROLAR DADOS
+function rolar(){
+ areaDados.innerHTML="";
+ let falhas=0;
+ for(let i=0;i<parseInt(rolarQtd.innerText);i++){
+   let v=Math.ceil(Math.random()*6);
+   let d=document.createElement("div");
+   d.className="dado";
+   d.innerText=v;
+   if(v>=4)d.classList.add("sucesso");
+   else falhas++;
+   areaDados.appendChild(d);
+ }
+ tensao.innerText=Math.min(10,parseInt(tensao.innerText)+falhas);
+ salvar();
+}
+
+// FOTO
+foto.onchange=()=>{
+ let file=foto.files[0];
+ let ref=storage.ref("fotos/"+uid);
+ ref.put(file).then(()=>ref.getDownloadURL().then(url=>{
+   preview.src=url;
+   db.collection("players").doc(uid).update({foto:url});
+ }));
+}
+
+// SALVAR / CARREGAR
+function salvar(){
+ db.collection("players").doc(uid).set({
+   nome:nome.value,
+   arquetipo:arquetipo.value,
+   historia:historia.value,
+   shots:shots.innerText,
+   tensao:tensao.innerText
+ },{merge:true});
+}
+
+function carregar(){
+ db.collection("players").doc(uid).get().then(d=>{
+  if(!d.exists)return;
+  let p=d.data();
+  nome.value=p.nome||"";
+  arquetipo.value=p.arquetipo||"";
+  historia.value=p.historia||"";
+  shots.innerText=p.shots||0;
+  tensao.innerText=p.tensao||0;
+  if(p.foto)preview.src=p.foto;
+ });
+}
+</script>
+</body>
+</html>
